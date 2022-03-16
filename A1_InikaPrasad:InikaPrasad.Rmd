@@ -1,0 +1,302 @@
+---
+title: "BCB420_InikaPrasad_RNotebook"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+---
+# Setup & Packages 
+```{r packages, message=FALSE, warning=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+if (!requireNamespace("GEOmetadb", quietly = TRUE))
+    BiocManager::install("GEOmetadb")
+
+# if (!require("SRAdb", quietly = TRUE))
+#   BiocManager::install("SRAdb")
+
+if (!require("edgeR", quietly = TRUE))
+  BiocManager::install("edgeR")
+
+if (!requireNamespace("stringr", quietly = TRUE))
+  install.packages("stringr")
+
+library(BiocManager)
+library(GEOmetadb)
+library(RSQLite)
+# library(SRAdb)
+library(edgeR)
+library(stringr)
+```
+
+# Dataset basics
+Fetch supplementary files and compile basic information: 
+```{r dataset basics, echo=FALSE, message=FALSE, warning=FALSE}
+#define GEO accession number
+GEO_accession <- "GSE165883"
+
+#Check if the file exists in your working directory
+#If file unavailable, download the file
+if(!exists(paste(getwd(),"GSE165883.soft.gz"))){
+  gse <- getGEO(GEO_accession,GSEMatrix=FALSE, destdir=getwd())
+}else{
+  gse <- getGEO(GEO_accession, filename=paste(getwd(),"GSE165883.soft.gz"), GSEMatrix=FALSE, destdir=getwd())}
+```
+
+```{r info}
+current_gpl <- names(GPLList(gse))[1]
+current_gpl_info <- Meta(getGEO(current_gpl))
+```
+
+* __Aim 1:__ Clean and normalize data obtained 
+* __GEO accession number:__ `r GEO_accession`
+* __Publication:__ Recurrent Human Papillomavirus–Related Head and Neck Cancer Undergoes Metabolic Reprogramming and Is Driven by Oxidative Phosphorylation 
+* __Platform title and organism:__ `r current_gpl_info$title`
+* __Submission date:__ `r current_gpl_info$submission_date`
+* __Last updated:__ `r current_gpl_info$last_update_date`
+* __Contact address:__ `r Meta(gse)$contact_address`
+* __Contact email:__ `r Meta(gse)$contact_email`
+* __Contact institute:__ `r Meta(gse)$contact_institute`
+
+Citation of paper: 
+
+> Avani Vyas, R. Alex Harbison, Daniel L. Faden, Mark Kubik, Drake Palmer, Qing Zhang, Hatice U. Osmanbeyoglu, Kirill Kiselyov, Eduardo Méndez, Umamaheswar Duvvuri; Recurrent Human Papillomavirus–Related Head and Neck Cancer Undergoes Metabolic Reprogramming and Is Driven by Oxidative Phosphorylation. Clin Cancer Res 15 November 2021; 27 (22): 6250–6264. https://doi.org/10.1158/1078-0432.CCR-20-4789
+
+__Control and test conditions of the dataset?__
+
+* __Primary tumors:__ n = 10
+* __Recurrent tumors:__ n = 10
+* There are 10 patients, with each contributing a sample for the primary tumor and for the recurrent tumor. 
+* The computerized tomography (CT) tumor stage and the TNM system grade can be found on the GSM GEO sample pages for each sample.
+
+__Why is the dataset of interest to you?__
+Tumor recurrence and cancer relapse are very interesting phenomena. What makes a cancer able to evade first-line therapy or lay latent in the body, often for long time periods? If we can figure out genes or pathways that promote metastasis and recurrence, we can control the often lethal parts of a cancer diagnosis. RNA-seq is an excellent way to do so. 
+
+# Accessing the dataset 
+```{r access dataset}
+supp_files = getGEOSuppFiles(GEO_accession)
+file_names = rownames(supp_files)
+file_names
+```
+
+```{r read data}
+#Read in the data 
+raw_data = read.delim(file_names[1],header=TRUE,check.names = FALSE, sep ="")
+
+#No. of genes
+dim(raw_data)[1] 
+
+#What does the data look like?
+knitr::kable(raw_data[1:15,], format = "markdown")
+```
+# Sample Information 
+Now, we are sorting samples by patient number and whether they are primary or recurrent tumors. 
+
+* __A samples:__ recurrent tumors.
+* __B samples:__ primary tumors 
+* __Note:__ UPHN stands for University of Pittsburgh, Head and Neck
+
+```{r extract sample data}
+#Extracting sample data from column names and adding them to a dataframe
+samples <- data.frame(lapply(colnames(raw_data)[2:21], 
+        FUN=function(x){c(str_sub(x,-1), str_sub(x,5))}))
+
+#adding row and column names to the matrix
+colnames(samples) <- colnames(raw_data)[2:21]
+rownames(samples) <- c("tumor_type", "patient_ID_number")
+samples <- data.frame(t(samples)) #transpose matrix 
+
+#Replacing codes "A" and "B" with tumor types
+samples["tumor_type"][samples["tumor_type"] == "A"] <- "Recurrent"
+samples["tumor_type"][samples["tumor_type"] == "B"] <- "Primary"
+
+library(readr)
+patient_number <- parse_number(samples$patient_ID_number)
+samples <- cbind(samples, patient_number)
+
+samples
+```
+# Checking for duplicated genes
+As the genes in this dataset have already been mapped to the HUGO identifiers, I don't expect to see duplicated genes. To confirm, see below.
+
+```{r check duplicates}
+#Any duplicates?
+summarized_gene_counts <- sort(table(raw_data[1]), decreasing = TRUE)
+knitr::kable(table(raw_data[1])[1:5], format="markdown")
+
+#Subtract the length of list of unique gene names from the complete list
+length(raw_data$Gene)-length(unique(raw_data$Gene))
+```
+
+
+However, inspecting the dataset for Y_RNA (small non-coding RNAs), SNOR (small nucleolar RNA), and U (small nuclear RNA),
+we find that several (`r length(raw_data$Gene[grep("SNOR", raw_data$Gene)])`) SNOR have been annnotated. 
+
+```{r SNORNA}
+#For example...
+raw_data$Gene[grep("SNOR", raw_data$Gene)][1:20]
+```
+
+```{r SNOR prop}
+#How many reads do the SNOR take up per sample? 
+row_numbers_SNOR <- rownames(raw_data)[grep("SNOR", raw_data$Gene)]
+total_reads <- colSums(raw_data[,2:21])
+SNOR_reads <- colSums(raw_data[row_numbers_SNOR,2:21])
+SNOR_percentages <- (SNOR_reads/total_reads)*100
+SNOR_percentages
+```
+SNOR reads take up between `r min(SNOR_percentages)` and `r max(SNOR_percentages)`% of total reads. They can be removed at a later stage if necessary.
+
+# Filtering out low counts
+We can turn counts into counts per million using the cpm function from the EdgeR package. There are 10 paired samples, so we will remove features without at least 1 read per million in 10 of the samples
+```{r CPM}
+counts_per_mill = cpm(raw_data[,2:21])
+rownames(counts_per_mill) <- raw_data[,1]
+
+# Aim: Remove of low counts
+#The value of the variable keep for a gene is TRUE only if 10 of the samples had more than 1 read
+keep = rowSums(counts_per_mill >1) >=10 
+
+#subset of the raw data that flfilled the above condition
+filtered_data = raw_data[keep,]
+
+#The number of genes remaining 
+dim(filtered_data)[1]
+```
+
+`r dim(raw_data)[1] - dim(filtered_data)[1]` genes were removed due to low counts. 
+
+# Normalization 
+## Trimmed Mean of M-values
+Trimmed Mean of M-values (TMM) was chosen as the method of normalization since it is specialized for RNA-seq data. It assumes that most genes are not differntially expressed. Robinson et. al explain in "A scaling normalization method for differential expression analysis of RNA-seq data" that TMM uses the weighted trimmed mean of the log expression ratios. 
+
+TMM normalization carried out with the EdgR package is very similar to RLE normalization (Relative Log Expression) with the DESeq package. The former was chosen for convenience.
+
+The choice of normalization method is further supported by its usage in the original publication with which this data set is associated.
+
+## M versus A plot
+The M versus A plot is the basis of the TMM normalization technique, so I thought it would be interesting to see for a pair of samples, 20A and 20B.
+20A is group 1, and 20B is group 2, so genes we see above the M = 0 line are upregulated in 20B compared to 20A. Labeling the genes far above or below the M=0 line would be interesting to label, but we leave that for downstream analysis.
+```{r MA plot}
+limma::plotMA(log2(filtered_data[,c(2,3)]), ylab="M - ratio log expression", main="Primary (20A) versus Recurrent (20B) Tumor")
+```
+## Carrying out TMM normalization 
+```{r TMM Normalization}
+#Converts dataframe of filtered data into a matrix 
+filtered_data_matrix <- as.matrix(filtered_data[,2:21])
+
+#Naming the rows of the matrix with the genes
+rownames(filtered_data_matrix) <- filtered_data$Gene
+
+#Function DGEList creates a DGEList object 
+#DGEList class is a list-based class for storing read counts and associated information
+d = DGEList(counts=filtered_data_matrix, group=samples$tumor_type)
+
+#Calculate normalization factors using the function 
+d = calcNormFactors(d)
+
+#examples of the top 5 normalization factors
+d$samples[1:5,]
+
+#Post-normalization data from using the counts per million function and the normalization factors 
+normalized_counts <- cpm(d)
+```
+
+## Boxplots pre- & post- normalization 
+Visualizing data with boxplots and computing counts per million. The boxplots declare several points as outliers and don't include them in the range of quartiles. These points could be excluded, but there is no technical, measurement-based reason to do so.
+
+The normalized samples line up to the median much better as compared to the non-normalized ones. 
+```{r Normalized boxplots, warning=FALSE}
+filtered_data2plot <- log2(cpm(filtered_data[,2:21]))
+normalized_data2plot <- log2(normalized_counts)
+
+#Filtered data boxplot
+boxplot(filtered_data2plot, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Filtered RNASeq Samples")
+
+abline(h = median(apply(filtered_data2plot, 2, median)), 
+       col = "darkred", lwd = 0.8, lty = "dashed")
+
+#Normalized data boxplot
+boxplot(normalized_data2plot, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Normalized RNASeq Samples")
+
+#draw the median on each box plot
+abline(h = median(apply(filtered_data2plot, 2, median)), 
+       col = "red", lwd = 0.8, lty = "dashed")
+```
+
+## Distributions pre- & post- normalization 
+Visualizing distribution of the data before and after normalization. The distribution does not appear to have changed with normalization. For example, using a Z-scored normalization would have shown a shift in the distribution to mean 0 and standard deviation of 1. However, the TMM normalization did not cause such a change.
+
+```{r Normalized distributions}
+filtered_counts_density <- apply(log2(cpm(filtered_data[,2:21])), 2, density)
+normalized_counts_density <- apply(log2(cpm(filtered_data[,2:21])), 2, density)
+
+#Make a for-loop to create two plots
+#1. filtered_counts_density plot
+#2. normalized counts_density 
+
+for (a in c(1,2))
+{
+  if (a == 1) {counts_density <- filtered_counts_density
+  plot_name <- "Density of Filtered Counts" }
+  if (a == 2) {counts_density <- normalized_counts_density
+  plot_name <- "Density of Normalized Counts"}
+  
+  #calculate the limits across all the samples
+  xlim <- 0
+  ylim <- 0
+  for (i in 1:length(counts_density)) {
+    xlim <- range(c(xlim, counts_density[[i]]$x)); 
+    ylim <- range(c(ylim, counts_density[[i]]$y))
+    }
+  cols <- rainbow(length(counts_density))
+  ltys <- rep(1, length(counts_density))
+  
+  #density plot
+  plot(counts_density[[1]], xlim=xlim, ylim=ylim, type="n",ylab="Smoothing density of log2-CPM", main=plot_name,cex.lab = 0.85)
+  
+  #plot each line, corresponding to each sample 
+  for (i in 1:length(counts_density)) 
+    lines(counts_density[[i]], col=cols[i], lty=ltys[i])
+  
+  #create legend
+  legend("topright", paste0(samples$patient_ID_number,"=",samples$tumor_type),col=cols, lty=ltys, cex=0.75,border ="blue",  text.col = "white", merge = TRUE, bg = "black")
+  }
+```
+## Sample Separation 
+Since our samples from primary and recurrent tumors are paired, it is appropriate to inspect sample separation. This can be done using a multidimensional scaling plot, also known as an MDS plot. The following plot shows that most of the sample pairs do not cluster together. Samples 5A and 5B seem to be an exception to this trend, appearing farther away from the others. 
+
+The primary tumors and recurrent tumors don't show a particularly separated clustering, unless you squint and see the primary tumors gathering in the center.
+
+```{r MDS}
+plotMDS(d, labels=paste0(samples$patient_ID_number),
+        col=c("darkgreen","blue")[factor(samples$tumor_type)], main="Sample Separation of Patients")
+
+legend("topright", c("A = Recurrent tumor", "B = Primary Tumor"), lty=ltys, border ="blue",  text.col = c("blue", "darkgreen"), merge = TRUE, bg = "white", title = "Patient tumor type", title.col = "black")
+```
+
+# Final Data 
+
+What the data finally looks like...
+```{r HUGO names}
+#assign HUGO names to rownames 
+knitr::kable(normalized_counts[1:15,], format = "markdown")
+
+#save the normalized counts to a file if a file isn't already present
+if(!exists("GSE165883_Normalized.Rds")){
+  write.table(normalized_counts,"GSE165883_Normalized.txt",sep=",",row.names=TRUE)}
+```
+
+# Answering Questions 
+* __Were there expression values that were not unique for specific genes? How did you handle these?__ No, since the gene mapping had already been carried out. If faced with this issue, a strategy would be to evenly distribute the expression values for the different genes. Alternatively, a more balanced approach would be to research which gene was more highly expressed and weight the expression values accordingly. 
+
+* __Expression values that could not be mapped to current HUGO symbols:__ None, as the dataset was already mapped. If present, one could check the HUGO symbols in use at the time of creation of the dataset. Doing so could give clues as to which genes the unmapped values corresponded to. If the dataset is current, these values can be excluded from downstream analysis or, if relatively high, could merit further investigation using less stringent genome alignment algorithms. 
+* __How many outliers were removed?__ None were removed, since there was no reason to believe that a measurement error would have occurred based on reading the paper. Two patients were removed from this dataset prior to analysis by the paper authors due to low quality reads. 
+How did you handle replicates?
+* __What is the final coverage of your dataset?__ Read depth, as ascertained from the paper, is 75 bp, in a paired-end sequencing system by Illumina. 
