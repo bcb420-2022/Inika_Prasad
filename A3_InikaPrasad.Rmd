@@ -1,0 +1,190 @@
+---
+title: "A3_InikaPrasad"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: true
+bibliography: Refs.bib
+---
+
+```{r, include=FALSE}
+res <- knitr::knit_child('A2_InikaPrasad_InikaPrasad.Rmd', quiet=TRUE)
+```
+
+# Introduction 
+The aim of Assignment 3 is to carry out non-thresholded geneset enrichment analysis and visualize the results using networks for the RNA-seq dataset downloaded from GEO with Accession Number GSE165883 associated with GEO publication "Recurrent Human Papillomavirus–Related Head and Neck Cancer Undergoes Metabolic Reprogramming and Is Driven by Oxidative Phosphorylation" (@vyas2021recurrent)
+
+Moving forward, we could use this analysis of the gene sets differences between primary and recurrent tumors to determine biological processes of interest, potential drug targets, etc. 
+
+# Non-thresholded Gene set Enrichment Analysis
+Aim: Conduct non-thresholded gene set enrichment analysis using the ranked set of genes from Assignment #2.
+
+## Method
+__What method did you use?__ 
+I used GSEA (Gene Set Enrichment Analysis) because it is easy to use with the Java app as well as a popular choice for exploratory analysis. 
+
+First, I ranked the differentially expressed genes in descending order with the following formula for rank: 
+-log10(p-value) * sign(logFC)
+
+The p-values used in this formula are un-adjusted for multiple hypothesis testing, following a Bader Lab tutorial. -log10(p-value) will always be positive since the p-value is a probability and between 0 and 1. The sign of the rank is equivalent to the sign of FC fold-change. A positive fold-change for a gene indicates that the gene is more highly expressed in Recurrent tumors compared to primary tumors, and vice-versa for a negative fold-change. 
+
+The ranked list is available on the BCB420-2022/Inika_Prasad GitHub Repository. It was made as follows: 
+```{r}
+#To actually compute and see the adjusted p-values: 
+adjusted_p_values <- p.adjust(tested_diff$table$PValue, method ="BH")
+
+#Compute ranks based on pre-adjustment p-values
+ranks <- -log10(tested_diff$table$PValue)*sign(tested_diff$table$logFC)
+
+#Add adjusted p-value and ranks to the table 
+de_table <- cbind(tested_diff$table, adjusted_p_values, ranks)
+
+#Sort table according to descending ranks
+de_table <- de_table[order(de_table[,5], decreasing = TRUE),]
+
+#Make a vector of genenames
+genenames <- unlist(lapply(rownames(de_table), function(data) {unlist(strsplit(data,"\\|"))[1]}))
+
+#Make and save table with genenames and ranks
+ranks <- cbind(genenames, de_table$ranks)
+colnames(ranks) <- c("GeneName","rank")
+
+
+#write.table(ranks,"PrimaryVSRecurrentTumors_ranks_3.rnk",col.name=TRUE,sep="\t",row.names=FALSE,quote=FALSE)
+```
+
+
+## Geneset
+__What genesets did you use? Make sure to specify versions and cite your methods.__
+The geneset used is from the Bader Lab, April 01, 2022. 
+http://download.baderlab.org/EM_Genesets/current_release/Human/symbol/Human_GOBP_AllPathways_no_GO_iea_April_01_2022_symbol.gmt
+This geneset is for humans, and conists of Gene Ontology Biological Processes and All pathways with no Inferred Electronically Annotations, meaning that the geneset is curated but smaller. 
+
+## Summary of Enrichment Results
+__Summarize your enrichment results__
+Upon running a pre-ranked GSEA with the rank file and geneset file, we get the following results: 
+
+Enrichments in Recurrent tumors: 
+3237 / 5553 gene sets are upregulated in phenotype na_pos
+414 gene sets are significant at FDR < 25%
+248 gene sets are significantly enriched at nominal pvalue < 1%
+529 gene sets are significantly enriched at nominal pvalue < 5%
+
+Enrichments in Primary tumors: 
+2316 / 5553 gene sets are upregulated in phenotype na_neg
+174 gene sets are significantly enriched at FDR < 25%
+134 gene sets are significantly enriched at nominal pvalue < 1%
+332 gene sets are significantly enriched at nominal pvalue < 5%
+
+## Comparison to thresholded analysis
+Skimming over the enriched genesets, I see many immunity related terms in the Recurrent tumors, whereas Primary tumors show many muscle-related terms. This is quite similar to the results from the thresholded gene analysis. 
+
+# Cytoscape 
+
+## Creating an enrichment map
+__What thresholds were used to create this map? Make sure to record all thresholds. Include a screenshot of your network prior to manual layout.__
+
+Using the Enrichment Map app on Cytoscape, I made an enrichment map with P-value cutoff of 0.005 and FDR Q-value cutoff of 0.05-
+There are 91 pathways with FDR q-values below or equal to 0.05. In total, there are 155 nodes and 645 edges.
+
+* Node cutoff: Q-value = 0.05 
+* Edge cutoff: 0.375 
+
+# Annotating the network
+Annotate your network - what parameters did you use to annotate the network. If you are using the default parameters make sure to list them as well. Collapse your network to a theme network. What are the major themes present in this analysis? Do they fit with the model? Are there any novel pathways or themes?
+
+The network was annotated using AutoAnnotate, which encapsulates groups of nodes under biological themes. For instance, the ten most most common, i.e. most node-encapsulating themes in this dataset were:
+
+For Recurrent tumors:
+* regulation cell adhesion (renamed Immune cell proliferation, adhesion, differentiation & activation)
+* differentiation proliferation activation (renamed and grouped with Immune cell proliferation, adhesion, differentiation & activation)
+* immune response humoral (renamed Humoral immune response)
+* immune response regulating (renamed Immune response signalling)
+* naive cells tcr (renamed T-cell receptors)
+
+
+For Primary tumors: 
+* assembly organization cellular (renamed Cytoskeletal organization)
+* cardiac morphogenesis tissue (renamed Cardiac and muscle morphogenesis)
+* regulation muscle process (renamed Cardiac and muscle morphogenesis)
+* mediated cell contraction	(renamed Cardiac and muscle contraction)
+* transmembrane negative transporter (renamed Transmembrane ion transport)
+	
+The genesets enriched in recurrent and primary tumors are well separated, with no overlap. 
+
+## Publication ready figure
+Please find the best resolution images in PDF format in my GitHub Repository. 
+
+# Interpretation 
+
+## Comparison to original paper
+Do the enrichment results support conclusions or mechanism discussed in the original paper? How do these results differ from the results you got from Assignment #2 thresholded methods
+
+The original paper finds pathways related to oxidative phosphorylation enriched in Recurrent tumors and validates this in-vitro and in-vivo. Oxidative phosphorylation is an important step in the production of ATP. This finding is not replicated in my analysis, presumably because the variables I included in my model do not match the authors. They state: 
+
+A negative binomial-generalized log-linear model was applied to determine differential expression including patient as a variable in the model to control for intrapatient differences in expression (expression ~ group + patient; group == primary or recurrence).
+
+However, I did not adjust for intrapatient differences in expression due to a good separation of patients on the MDS plot. 
+
+The results from the thresholded and non-thresholded analyses I have carried out are consistent with each other.
+
+## Evidence for my results
+Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your result?
+
+A study by (@joo2019high) found that HPV infections associated with subsequent development of atherosclerosis, with potential underlying mechanisms including vascular inflammation. The modification of vasculature could encompass and thus help explain many of the muscle-related processes we see in primary HPV-related head and neck tumors. 
+
+The interleukines upregulated in recurrent tumors (IL-1, IL-12, IL-23) are part of pro-inflammatory pathways. For example, IL-1 mediates inflammation in both innate and adaptive immune systems. (@fields2019structural). IL-12 and IL-23 is an important signalling molecules for T-cell activation. These pathways could be up-regulated in response to the human papillomavirus. 
+
+Moreover, the evidence I found for my thresholded gene analysis still applies here. See below for a recap: 
+
+We may be seeing an enrichment of immune system processes as immune evasion is one of the well-known hallmarks of cancer (@hanahan2011hallmarks) and infection by HPV (Human Papilloma Virus) has to potential to cause cancer if the immune system cannot stop the infection before integration in the host genome. (@zhou2019papillomavirus) 
+
+Papers explaining the enrichment of muscle-related genes in primary tumors have proved more challenging, but a proteogenomics paper found a nearly identical enrichment profile in HPV negative primary tumors. (@huang2021proteogenomic)
+
+## A pathway in detail: muscular component in Primary HPV-related tumors
+__Choose a specific pathway or theme to investigate in more detail. Why did you choose this pathway or theme? Show the pathway or theme as a gene network or as a pathway diagram. Annotate the network or pathway with your original log fold expression values and p-values to show how it is effected in your model. (Hint: if the theme or pathway is not from database that has detailed mechanistic information like Reactome you can use apps like GeneMANIA or String to build the the interaction network.)__
+
+I would like to investigate the TEK pathway in more detail. I hadn't heard of it before and I was looking for a way to label the node RAC1/PAK1/p38/MMP2 pathway. I found a WikiPathways entry explaining that these proteins are part of a cell signaling pathways downstream of TEK receptor activity related to tumor growth, angiogenesis, and cell proliferation.
+
+The TEK gene, also known as TIE, codes for Angiopoietin-1 receptor (@khan2014signaling). Therapeutic targeting of this pathway is still being researched, but I found that the signalling pathway that TEK is part of regulates vascular homeostasis, and controls vessel permeability, inflammation and angiogenic responses. It is also important for embryonic cardiovascular and lymphatic development (@saharinen2017therapeutic). It is an interesting link between all the cardiac and muscle development processes enriched in primary tumors and the more inflammation and immunity-related processes enriched in recurrent tumors. 
+
+To look at how the pathway is affected in my dataset, I have subsetted my dataset using the proteins available in the TEK pathway using WikiPathways WP3303 (@WP3033Pathway) in the following manner.
+
+```{r}
+#Import the list of genes in the TEK pathway from WikiPathways. 
+library(readxl)
+TEK_Pathway <- read_excel("~/Desktop/3.BCB420/BCB420/A3_InikaPrasad/TEK Pathway.xlsx")
+
+de_table1 <- cbind(row.names(de_table), de_table)
+names(de_table1)[1] <- "Proteins"
+
+#Create a vector of the TEK pathway proteins
+TEKprots <- TEK_Pathway$Proteins
+
+#Search for the TEK pathway proteins in our dataset using the %in% function
+dataset_prots <- de_table1[de_table1$Proteins %in% TEKprots,]
+
+#Create a "not in" operator
+`%notin%` <- Negate(`%in%`)
+
+#Find the TEK pathway proteins we don't have logFC data for 
+dataset_prots_missing <- TEK_Pathway[TEK_Pathway$Proteins %notin% dataset_prots$Proteins,]
+
+TEK_complete_prots <- plyr::rbind.fill(dataset_prots, dataset_prots_missing)
+
+TEK_complete_prots
+
+#write.table(TEK_complete_prots,"TEKProteins.xls",col.name=TRUE,sep="\t",row.names=FALSE,quote=FALSE)
+```
+I can now use this list to annotate the TEK Pathway nodes with logFC values and p-values in Cytoscape.In the excel file produced, I later added a column called labels Cytoscape in the excel file which is a compilation of the protein name, logFC value, and whether the change is significant with the threshold p-value < 0.05. Attempting to label the nodes with these compiled labels results in a very messy and hard to read pathway. Therefore, I have elected to represent logFC by a colour gradient, and p-value with node border thickness. For optimum resolution, please refer to the PDF. 
+
+# Conclusion 
+This concludes the final assignment for BCB420 where I have worked with the data from the GEO publication "Recurrent Human Papillomavirus–Related Head and Neck Cancer Undergoes Metabolic Reprogramming and Is Driven by Oxidative Phosphorylation" (@vyas2021recurrent). 
+
+# References 
+
+
+
+
+
