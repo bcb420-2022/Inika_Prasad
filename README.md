@@ -7,6 +7,6 @@ repository for bcb420 for Inika Prasad
 
 [R Notebook (HTML)knitted for Assignment 2](https://github.com/bcb420-2022/Inika_Prasad/blob/main/A2_InikaPrasad-InikaPrasad.html)
 
-[Journal for Assignment 2](https://github.com/bcb420-2022/Inika_Prasad/wiki/Assignment-2-Journal)
+[Journal for Assignment 2](https://github.com/bcb420-2022/Inika_Prasad/wiki/3.-Assignment-2)
 
 [Journal for Assignment 3] (https://github.com/bcb420-2022/Inika_Prasad/wiki/4.-Assignment-3)
