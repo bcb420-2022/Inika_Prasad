@@ -1,12 +1,12 @@
 # Inika_Prasad
-repository for bcb420 for Inika Prasad 
+Repository for bcb420: Computational Systems Biology at the University of Toronto, 2022.
 
-[R Notebook for Assignment 1](https://github.com/bcb420-2022/Inika_Prasad/blob/fef0ee1cee7924b6e990c2cec1ecba1a0cf52d24/RNotebook_20Feb.Rmd)
+Here are contained files (Rmd and HTML) for selecting, cleaning, and analysing an RNA-seq dataset from the paper "Recurrent Human Papillomavirus–Related Head and Neck Cancer Undergoes Metabolic Reprogramming and Is Driven by Oxidative Phosphorylation". Dataset from GEO. 
 
-[R Notebook (HTML) knitted for Assignment 1](https://github.com/bcb420-2022/Inika_Prasad/blob/e6b6fe0cae9574c418f682cc1486fd1d4c281855/RNotebook_20Feb.html)
 
-[R Notebook (HTML)knitted for Assignment 2](https://github.com/bcb420-2022/Inika_Prasad/blob/main/A2_InikaPrasad-InikaPrasad.html)
+The wiki includes notes from lectures, process of doing the assignments, errors, troubleshooting, and mini-assignments like using g:Profiler. 
 
-[Journal for Assignment 2](https://github.com/bcb420-2022/Inika_Prasad/wiki/3.-Assignment-2)
+Assignment 1: Dataset basics, cleaning, TMM normalisation, sample separation
+Assignment 2: Differential gene expression, multiple-testing correction, and over-representation analysis
+Assignment 3: Non-thresholded geneset enrichment analysis (GSEA) and visualize the results using networks (Cytoscape), network annotation.
 
-[Journal for Assignment 3] (https://github.com/bcb420-2022/Inika_Prasad/wiki/4.-Assignment-3)
