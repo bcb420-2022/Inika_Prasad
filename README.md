@@ -6,7 +6,7 @@ Here are contained files (Rmd and HTML) for selecting, cleaning, and analysing a
 
 The wiki includes notes from lectures, process of doing the assignments, errors, troubleshooting, and mini-assignments like using g:Profiler. 
 
-Assignment 1: Dataset basics, cleaning, TMM normalisation, sample separation
-Assignment 2: Differential gene expression, multiple-testing correction, and over-representation analysis
-Assignment 3: Non-thresholded geneset enrichment analysis (GSEA) and visualize the results using networks (Cytoscape), network annotation.
+* Assignment 1: Dataset basics, cleaning, TMM normalisation, sample separation
+* Assignment 2: Differential gene expression, multiple-testing correction, and over-representation analysis
+* Assignment 3: Non-thresholded geneset enrichment analysis (GSEA) and visualize the results using networks (Cytoscape), network annotation.
 
